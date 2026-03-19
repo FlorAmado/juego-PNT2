@@ -3,366 +3,396 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tetris Moderno - Vanilla JS</title>
+    <title>Michi-Acariciador 3000</title>
     <style>
         :root {
-            --bg-color: #0f0f1a;
-            --grid-color: #1f1f2e;
-            --text-color: #ffffff;
-            --accent-color: #00d4ff;
+            --bg-color: #f0f4f8; /* Azul grisáceo muy claro */
+            --primary-color: #ff9fb2; /* Rosa pastel para detalles */
+            --accent-color: #a8dadc; /* Azul pastel para la UI */
+            --text-color: #444;
+            --box-color: #d1b48c; /* Color cartón para las cajas */
+            --cat-color-1: #6a6a6a; /* Gato gris */
+            --cat-color-2: #e0ac69; /* Gato naranja */
+            --cat-color-3: #222;     /* Gato negro */
         }
 
+        @import url('https://fonts.googleapis.com/css2?family=Varela+Round&display=swap');
+
         body {
+            font-family: 'Varela Round', sans-serif;
             background-color: var(--bg-color);
             color: var(--text-color);
-            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
             display: flex;
             flex-direction: column;
             align-items: center;
             justify-content: center;
-            height: 100vh;
-            margin: 0;
-            overflow: hidden;
+            min-height: 100vh;
+            overflow: hidden; /* Evita scrolls raros en móviles */
         }
 
-        .game-container {
+        /* --- UI Elements --- */
+        #game-ui {
+            text-align: center;
+            margin-bottom: 20px;
+            background: rgba(255, 255, 255, 0.8);
+            padding: 15px 30px;
+            border-radius: 20px;
+            box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+            backdrop-filter: blur(5px);
+        }
+
+        h1 { margin: 0; font-size: 2rem; color: #ff8ca3; }
+        #instructions { font-size: 0.9rem; color: #777; margin-bottom: 10px; }
+
+        .stats-bar {
             display: flex;
             gap: 20px;
+            justify-content: center;
+            font-size: 1.2rem;
+            font-weight: bold;
+        }
+
+        .stat { display: flex; align-items: center; gap: 8px; }
+        .stat i { font-style: normal; } /* For emojis */
+
+        #start-btn {
+            background-color: var(--primary-color);
+            color: white;
+            border: none;
+            padding: 10px 25px;
+            font-size: 1.1rem;
+            border-radius: 50px;
+            cursor: pointer;
+            font-family: inherit;
+            margin-top: 10px;
+            transition: transform 0.2s, background-color 0.2s;
+            box-shadow: 0 3px 10px rgba(255, 159, 178, 0.4);
+        }
+
+        #start-btn:hover { background-color: #ff8ca3; transform: scale(1.05); }
+        #start-btn:active { transform: scale(0.95); }
+
+        /* --- Game Area --- */
+        #game-area {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 20px;
             padding: 20px;
-            background: rgba(255, 255, 255, 0.05);
+            max-width: 600px;
+            width: 90%;
+            background: white;
+            border-radius: 25px;
+            box-shadow: 0 10px 30px rgba(0,0,0,0.08);
+        }
+
+        @media (max-width: 500px) {
+            #game-area { grid-template-columns: repeat(2, 1fr); }
+            #game-area > div:nth-child(5), #game-area > div:nth-child(6) { display: none; } /* Oculta los últimos 2 en móvil muy pequeño */
+        }
+
+        .hole {
+            position: relative;
+            aspect-ratio: 1; /* Cajas cuadradas */
+            background-color: var(--box-color);
             border-radius: 15px;
-            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
-            border: 1px solid rgba(255, 255, 255, 0.1);
+            overflow: hidden; /* Importante para que el gato parezca salir */
+            box-shadow: inset 0 5px 15px rgba(0,0,0,0.1);
         }
 
-        canvas {
-            border: 2px solid var(--grid-color);
-            background-color: #000;
-            border-radius: 5px;
-        }
-
-        .stats {
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            min-width: 150px;
-        }
-
-        h1 { margin: 0 0 20px 0; font-weight: 300; letter-spacing: 5px; color: var(--accent-color); }
-        
-        .stat-box {
-            background: rgba(0, 0, 0, 0.3);
-            padding: 15px;
+        /* La "tapa" de la caja que oculta al gato al principio */
+        .hole::after {
+            content: '';
+            position: absolute;
+            bottom: -5px; left: 0; width: 100%; height: 25%;
+            background-color: var(--box-color);
             border-radius: 10px;
-            margin-bottom: 10px;
-            text-align: center;
+            z-index: 10;
         }
 
-        .stat-label { font-size: 12px; text-transform: uppercase; color: #888; }
-        .stat-value { font-size: 24px; font-weight: bold; }
-
-        .controls {
-            margin-top: 20px;
-            font-size: 14px;
-            color: #666;
-            text-align: center;
+        /* --- CSS CATS (Hechos solo con CSS, sin imágenes) --- */
+        .cat {
+            position: absolute;
+            width: 80%;
+            height: 100%;
+            bottom: -110%; /* Empieza totalmente oculto abajo */
+            left: 10%;
+            transition: bottom 0.2s ease-out; /* Velocidad de aparición */
+            cursor: pointer;
+            z-index: 5;
         }
 
-        kbd {
-            background: #333;
-            padding: 2px 6px;
-            border-radius: 4px;
-            color: #eee;
+        /* Clase activada por JS para que el gato "salte" */
+        .cat.up { bottom: -10%; } 
+
+        .cat-body {
+            position: absolute;
+            bottom: 0; width: 100%; height: 70%;
+            background-color: var(--cat-color-1); /* Color base (gris por defecto) */
+            border-radius: 50px 50px 0 0;
+            box-shadow: inset 0 -10px 10px rgba(0,0,0,0.1);
         }
+
+        /* Variaciones de color de los gatos */
+        .hole.c1 .cat-body { background-color: var(--cat-color-1); }
+        .hole.c2 .cat-body { background-color: var(--cat-color-2); }
+        .hole.c3 .cat-body { background-color: var(--cat-color-3); }
+
+        .cat-ear {
+            position: absolute;
+            top: -15px; width: 0; height: 0;
+            border-left: 20px solid transparent;
+            border-right: 20px solid transparent;
+            border-bottom: 30px solid var(--cat-color-1);
+        }
+        .hole.c1 .cat-ear { border-bottom-color: var(--cat-color-1); }
+        .hole.c2 .cat-ear { border-bottom-color: var(--cat-color-2); }
+        .hole.c3 .cat-ear { border-bottom-color: var(--cat-color-3); }
+
+        .cat-ear.left { left: 5px; transform: rotate(-15deg); }
+        .cat-ear.right { right: 5px; transform: rotate(15deg); }
+
+        .cat-eye {
+            position: absolute;
+            top: 25%; width: 10px; height: 10px;
+            background-color: white;
+            border-radius: 50%;
+        }
+        .cat-eye::after {
+            content: ''; position: absolute;
+            top: 2px; left: 3px; width: 4px; height: 4px;
+            background-color: black; border-radius: 50%;
+        }
+        .cat-eye.left { left: 20%; }
+        .cat-eye.right { right: 20%; }
+
+        .cat-nose {
+            position: absolute;
+            top: 45%; left: calc(50% - 5px);
+            width: 0; height: 0;
+            border-left: 6px solid transparent;
+            border-right: 6px solid transparent;
+            border-top: 6px solid #ffb6c1; /* Rosa nariz */
+            border-radius: 2px;
+        }
+
+        /* --- Feedback de "Acariciado" --- */
+        .cat.pet {
+            animation: petEffect 0.4s ease;
+        }
+
+        @keyframes petEffect {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2) translateY(-10px) rotate(5deg); }
+            100% { transform: scale(1); }
+        }
+
+        /* Partícula de corazón que sale al acariciar */
+        .heart-particle {
+            position: absolute;
+            color: #ff6b81;
+            font-size: 1.5rem;
+            pointer-events: none;
+            z-index: 20;
+            animation: heartFade 0.6s ease-out forwards;
+        }
+
+        @keyframes heartFade {
+            0% { transform: translateY(0) scale(0.5); opacity: 1; }
+            100% { transform: translateY(-40px) scale(1.2); opacity: 0; }
+        }
+
+        /* --- Game Over Overlay --- */
+        #game-over {
+            position: fixed;
+            top: 0; left: 0; width: 100%; height: 100%;
+            background-color: rgba(0,0,0,0.85);
+            display: none; /* Oculto al principio */
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            z-index: 100;
+            backdrop-filter: blur(8px);
+        }
+
+        #game-over h2 { font-size: 3rem; color: var(--primary-color); margin-bottom: 10px; }
+        #final-score-msg { font-size: 1.5rem; margin-bottom: 20px; }
+
     </style>
 </head>
 <body>
 
-    <h1>TETRIS</h1>
-
-    <div class="game-container">
-        <canvas id="tetris" width="240" height="400"></canvas>
-        
-        <div class="stats">
-            <div class="stat-box">
-                <div class="stat-label">Puntaje</div>
-                <div id="score" class="stat-value">0</div>
-            </div>
-            <div class="stat-box">
-                <div class="stat-label">Líneas</div>
-                <div id="lines" class="stat-value">0</div>
-            </div>
-            <button id="start-btn" style="padding: 10px; cursor: pointer; background: var(--accent-color); border: none; border-radius: 5px; font-weight: bold;">REINICIAR</button>
-        </div>
+    <div id="game-over">
+        <h2>🐈 ¡Tiempo Agotado! 🐈</h2>
+        <p id="final-score-msg"></p>
+        <button id="restart-btn" onclick="startGame()" style="background-color: var(--accent-color); color: #333; padding: 15px 30px; border:none; border-radius: 50px; font-weight:bold; cursor:pointer;">¿Otra caricia?</button>
     </div>
 
-    <div class="controls">
-        Usa las flechas <kbd>←</kbd> <kbd>→</kbd> para mover, <kbd>↑</kbd> para rotar y <kbd>↓</kbd> para bajar rápido.
+    <div id="game-ui">
+        <h1>Michi-Acariciador 3000</h1>
+        <p id="instructions">¡Acaricia (haz clic) a los gatitos que salgan de sus cajas antes de que se escondan!</p>
+        
+        <div class="stats-bar">
+            <div class="stat"><i>💖</i> Acariciados: <span id="score">0</span></div>
+            <div class="stat"><i>⏱️</i> Tiempo: <span id="time">15</span>s</div>
+        </div>
+
+        <button id="start-btn" onclick="startGame()">¡Empezar Acariciación!</button>
+    </div>
+
+    <div id="game-area">
+        <div class="hole c1"><div class="cat">
+            <div class="cat-ear left"></div><div class="cat-ear right"></div>
+            <div class="cat-body"><div class="cat-eye left"></div><div class="cat-eye right"></div><div class="cat-nose"></div></div>
+        </div></div>
+        <div class="hole c2"><div class="cat">
+            <div class="cat-ear left"></div><div class="cat-ear right"></div>
+            <div class="cat-body"><div class="cat-eye left"></div><div class="cat-eye right"></div><div class="cat-nose"></div></div>
+        </div></div>
+        <div class="hole c3"><div class="cat">
+            <div class="cat-ear left"></div><div class="cat-ear right"></div>
+            <div class="cat-body"><div class="cat-eye left"></div><div class="cat-eye right"></div><div class="cat-nose"></div></div>
+        </div></div>
+        <div class="hole c1"><div class="cat">
+            <div class="cat-ear left"></div><div class="cat-ear right"></div>
+            <div class="cat-body"><div class="cat-eye left"></div><div class="cat-eye right"></div><div class="cat-nose"></div></div>
+        </div></div>
+        <div class="hole c2"><div class="cat">
+            <div class="cat-ear left"></div><div class="cat-ear right"></div>
+            <div class="cat-body"><div class="cat-eye left"></div><div class="cat-eye right"></div><div class="cat-nose"></div></div>
+        </div></div>
+        <div class="hole c3"><div class="cat">
+            <div class="cat-ear left"></div><div class="cat-ear right"></div>
+            <div class="cat-body"><div class="cat-eye left"></div><div class="cat-eye right"></div><div class="cat-nose"></div></div>
+        </div></div>
     </div>
 
     <script>
-        const canvas = document.getElementById('tetris');
-        const context = canvas.getContext('2d');
-        const scoreElement = document.getElementById('score');
-        const linesElement = document.getElementById('lines');
+        // --- Variables de Estado del Juego ---
+        const holes = document.querySelectorAll('.hole');
+        const cats = document.querySelectorAll('.cat');
+        const scoreBoard = document.getElementById('score');
+        const timeBoard = document.getElementById('time');
+        const startBtn = document.getElementById('start-btn');
+        const gameOverScreen = document.getElementById('game-over');
+        const finalScoreMsg = document.getElementById('final-score-msg');
 
-        context.scale(20, 20);
+        let lastHole; // Para no repetir la misma caja dos veces seguidas
+        let timeUp = false; // Bandera de fin de tiempo
+        let score = 0;
+        let countdown; // Intervalo del temporizador
+        let gameTimer; // Timeout para el bucle de aparición
 
-        // Lógica de eliminación de líneas
-        function arenaSweep() {
-            let rowCount = 1;
-            outer: for (let y = arena.length - 1; y > 0; --y) {
-                for (let x = 0; x < arena[y].length; ++x) {
-                    if (arena[y][x] === 0) {
-                        continue outer;
-                    }
+        // --- Configuración Principal ---
+        const GAME_DURATION = 15; // Segundos por partida
+        const MIN_CAT_UP_TIME = 400; //ms que el gato está arriba como mínimo
+        const MAX_CAT_UP_TIME = 1000; //ms que el gato está arriba como máximo
+
+        // --- Funciones Lógicas del Juego ---
+
+        // Elige una caja aleatoria que no sea la última
+        function randomHole(holesList) {
+            const idx = Math.floor(Math.random() * holesList.length);
+            const hole = holesList[idx];
+            if (hole === lastHole) return randomHole(holesList);
+            lastHole = hole;
+            return hole;
+        }
+
+        // Elige un tiempo aleatorio que el gato estará arriba
+        function randomTime(min, max) {
+            return Math.round(Math.random() * (max - min) + min);
+        }
+
+        // Bucle principal: hace aparecer a un gato
+        function peep() {
+            if (timeUp) return; // Si el tiempo acabó, paramos el bucle
+
+            const time = randomTime(MIN_CAT_UP_TIME, MAX_CAT_UP_TIME);
+            const hole = randomHole(holes);
+            const cat = hole.querySelector('.cat');
+            
+            cat.classList.remove('pet'); // Limpiamos estado anterior
+            cat.classList.add('up'); // Gato aparece
+
+            // El gato se esconde tras el tiempo aleatorio
+            gameTimer = setTimeout(() => {
+                cat.classList.remove('up');
+                if (!timeUp) peep(); // Llama a la siguiente aparición
+            }, time);
+        }
+
+        // Función que se ejecuta al hacer clic en un gato
+        function petCat(e) {
+            if (!e.isTrusted) return; // Evita clics por scripts/trampas
+            const cat = this;
+
+            // Si el gato ya fue acariciado o está escondiéndose, no cuenta
+            if (cat.classList.contains('pet') || !cat.classList.contains('up')) return;
+
+            score++;
+            cat.classList.add('pet'); // Añade animación de acariciado
+            scoreBoard.textContent = score;
+
+            // Feedback visual: Partícula de corazón
+            createHeartParticle(e.clientX, e.clientY);
+        }
+
+        // Crea un emoji de corazón donde se hizo el clic
+        function createHeartParticle(x, y) {
+            const heart = document.createElement('div');
+            heart.classList.add('heart-particle');
+            heart.textContent = '❤️';
+            heart.style.left = `${x - 10}px`;
+            heart.style.top = `${y - 10}px`;
+            document.body.appendChild(heart);
+            setTimeout(() => heart.remove(), 600); // Limpia la partícula
+        }
+
+        // Inicia/Reinicia el juego
+        function startGame() {
+            // Reinicio de UI y estados
+            gameOverScreen.style.display = 'none';
+            startBtn.style.display = 'none'; // Oculta el botón mientras juegas
+            scoreBoard.textContent = 0;
+            timeBoard.textContent = GAME_DURATION;
+            
+            score = 0;
+            timeUp = false;
+            let timeLeft = GAME_DURATION;
+
+            // Limpia cualquier gato que haya quedado arriba
+            cats.forEach(cat => cat.classList.remove('up', 'pet'));
+
+            // Inicia el temporizador visual
+            countdown = setInterval(() => {
+                timeLeft--;
+                if (timeLeft <= 0) {
+                    clearInterval(countdown);
+                    endGame();
                 }
-                const row = arena.splice(y, 1)[0].fill(0);
-                arena.unshift(row);
-                ++y;
-                player.score += rowCount * 10;
-                player.lines += 1;
-                rowCount *= 2;
-            }
-            updateScore();
+                if (timeLeft >= 0) timeBoard.textContent = timeLeft;
+            }, 1000);
+
+            // Inicia el bucle de los gatos
+            peep();
         }
 
-        // Detección de colisiones
-        function collide(arena, player) {
-            const [m, o] = [player.matrix, player.pos];
-            for (let y = 0; y < m.length; ++y) {
-                for (let x = 0; x < m[y].length; ++x) {
-                    if (m[y][x] !== 0 &&
-                       (arena[y + o.y] && arena[y + o.y][x + o.x]) !== 0) {
-                        return true;
-                    }
-                }
-            }
-            return false;
+        // Finaliza la partida
+        function endGame() {
+            timeUp = true;
+            clearTimeout(gameTimer); // Para el bucle inmediato
+            
+            // Muestra Game Over con puntuación
+            finalScoreMsg.textContent = `Acariciaste a ${score} michis. ¡Eres adorable!`;
+            gameOverScreen.style.display = 'flex';
+            startBtn.style.display = 'inline-block'; // Reaparece el botón por si cierran el overlay
         }
 
-        // Crear matriz
-        function createMatrix(w, h) {
-            const matrix = [];
-            while (h--) {
-                matrix.push(new Array(w).fill(0));
-            }
-            return matrix;
-        }
+        // --- Event Listeners ---
+        cats.forEach(cat => cat.addEventListener('click', petCat));
 
-        // Definición de las piezas
-        function createPiece(type) {
-            if (type === 'I') {
-                return [
-                    [0, 1, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 1, 0, 0],
-                    [0, 1, 0, 0],
-                ];
-            } else if (type === 'L') {
-                return [
-                    [0, 2, 0],
-                    [0, 2, 0],
-                    [0, 2, 2],
-                ];
-            } else if (type === 'J') {
-                return [
-                    [0, 3, 0],
-                    [0, 3, 0],
-                    [3, 3, 0],
-                ];
-            } else if (type === 'O') {
-                return [
-                    [4, 4],
-                    [4, 4],
-                ];
-            } else if (type === 'Z') {
-                return [
-                    [5, 5, 0],
-                    [0, 5, 5],
-                    [0, 0, 0],
-                ];
-            } else if (type === 'S') {
-                return [
-                    [0, 6, 6],
-                    [6, 6, 0],
-                    [0, 0, 0],
-                ];
-            } else if (type === 'T') {
-                return [
-                    [0, 7, 0],
-                    [7, 7, 7],
-                    [0, 0, 0],
-                ];
-            }
-        }
-
-        // Dibujar
-        function draw() {
-            context.fillStyle = '#000';
-            context.fillRect(0, 0, canvas.width, canvas.height);
-
-            drawMatrix(arena, {x: 0, y: 0});
-            drawMatrix(player.matrix, player.pos);
-        }
-
-        const colors = [
-            null,
-            '#FF0D72',
-            '#0DC2FF',
-            '#0DFF72',
-            '#F538FF',
-            '#FF8E0D',
-            '#FFE138',
-            '#3877FF',
-        ];
-
-        function drawMatrix(matrix, offset) {
-            matrix.forEach((row, y) => {
-                row.forEach((value, x) => {
-                    if (value !== 0) {
-                        context.fillStyle = colors[value];
-                        context.fillRect(x + offset.x, y + offset.y, 1, 1);
-                        // Borde sutil para las piezas
-                        context.lineWidth = 0.05;
-                        context.strokeStyle = 'white';
-                        context.strokeRect(x + offset.x, y + offset.y, 1, 1);
-                    }
-                });
-            });
-        }
-
-        function merge(arena, player) {
-            player.matrix.forEach((row, y) => {
-                row.forEach((value, x) => {
-                    if (value !== 0) {
-                        arena[y + player.pos.y][x + player.pos.x] = value;
-                    }
-                });
-            });
-        }
-
-        function rotate(matrix, dir) {
-            for (let y = 0; y < matrix.length; ++y) {
-                for (let x = 0; x < y; ++x) {
-                    [
-                        matrix[x][y],
-                        matrix[y][x],
-                    ] = [
-                        matrix[y][x],
-                        matrix[x][y],
-                    ];
-                }
-            }
-            if (dir > 0) {
-                matrix.forEach(row => row.reverse());
-            } else {
-                matrix.reverse();
-            }
-        }
-
-        function playerDrop() {
-            player.pos.y++;
-            if (collide(arena, player)) {
-                player.pos.y--;
-                merge(arena, player);
-                playerReset();
-                arenaSweep();
-                updateScore();
-            }
-            dropCounter = 0;
-        }
-
-        function playerMove(offset) {
-            player.pos.x += offset;
-            if (collide(arena, player)) {
-                player.pos.x -= offset;
-            }
-        }
-
-        function playerReset() {
-            const pieces = 'TJLOSZI';
-            player.matrix = createPiece(pieces[pieces.length * Math.random() | 0]);
-            player.pos.y = 0;
-            player.pos.x = (arena[0].length / 2 | 0) -
-                           (player.matrix[0].length / 2 | 0);
-            if (collide(arena, player)) {
-                arena.forEach(row => row.fill(0));
-                player.score = 0;
-                player.lines = 0;
-                updateScore();
-            }
-        }
-
-        function playerRotate(dir) {
-            const pos = player.pos.x;
-            let offset = 1;
-            rotate(player.matrix, dir);
-            while (collide(arena, player)) {
-                player.pos.x += offset;
-                offset = -(offset + (offset > 0 ? 1 : -1));
-                if (offset > player.matrix[0].length) {
-                    rotate(player.matrix, -dir);
-                    player.pos.x = pos;
-                    return;
-                }
-            }
-        }
-
-        let dropCounter = 0;
-        let dropInterval = 1000;
-        let lastTime = 0;
-
-        function update(time = 0) {
-            const deltaTime = time - lastTime;
-            lastTime = time;
-
-            dropCounter += deltaTime;
-            if (dropCounter > dropInterval) {
-                playerDrop();
-            }
-
-            draw();
-            requestAnimationFrame(update);
-        }
-
-        function updateScore() {
-            scoreElement.innerText = player.score;
-            linesElement.innerText = player.lines;
-        }
-
-        const arena = createMatrix(12, 20);
-
-        const player = {
-            pos: {x: 0, y: 0},
-            matrix: null,
-            score: 0,
-            lines: 0,
-        };
-
-        document.addEventListener('keydown', event => {
-            if (event.keyCode === 37) {
-                playerMove(-1);
-            } else if (event.keyCode === 39) {
-                playerMove(1);
-            } else if (event.keyCode === 40) {
-                playerDrop();
-            } else if (event.keyCode === 38) {
-                playerRotate(1);
-            }
-        });
-
-        document.getElementById('start-btn').addEventListener('click', () => {
-            arena.forEach(row => row.fill(0));
-            player.score = 0;
-            player.lines = 0;
-            updateScore();
-            playerReset();
-        });
-
-        playerReset();
-        updateScore();
-        update();
     </script>
 </body>
 </html>
