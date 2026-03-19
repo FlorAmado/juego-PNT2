@@ -1,1 +1,1 @@
-# Tetris-PNT2
+# Juego-PNT2
